@@ -26,10 +26,10 @@ class Lyric:
 def fetch_lyrics(title: str, artist: str):
     print(f"Fetching lyrics for: {title} by {artist}")
     try:
-        base_url = "https://lrclib.net/api/search"   
+        base_url = "https://lrclib.net/api/search" 
         params = {'q': f"{title} {artist}"}
         url = f"{base_url}?{urllib.parse.urlencode(params)}"
-        
+
         with urllib.request.urlopen(url) as response:
             if response.status == 200:
                 results = json.loads(response.read().decode())
@@ -48,36 +48,29 @@ def fetch_lyrics(title: str, artist: str):
         print(f"Error fetching lyrics: {e}")
     return []
 
-# === MPRIS HELPER ===
+# === MEDIA INFO PARSER ===
 def get_media_info():
     try:
         import subprocess
-        
-        # Get playback status
-        status = subprocess.run(['playerctl', 'status'], 
-                              capture_output=True, text=True).stdout.strip()
-        
-        if status != "Playing":
-            return {
-                'playing': False,
-                'title': None,
-                'artist': None,
-                'position': 0
-            }
 
-        # Get metadata
-        title = subprocess.run(['playerctl', 'metadata', 'title'], 
-                             capture_output=True, text=True).stdout.strip()
-        artist = subprocess.run(['playerctl', 'metadata', 'artist'], 
+        # Get status
+        status = subprocess.run(['playerctl', 'status'],
+                               capture_output=True, text=True).stdout.strip()
+        if status not in ["Playing", "Paused"]:
+            return None
+
+        title = subprocess.run(['playerctl', 'metadata', 'title'],
                               capture_output=True, text=True).stdout.strip()
-        position_ms = int(float(subprocess.run(['playerctl', 'position'], 
-                                             capture_output=True, text=True).stdout.strip()) * 1000)
+        artist = subprocess.run(['playerctl', 'metadata', 'artist'],
+                               capture_output=True, text=True).stdout.strip()
+        position_ms = int(float(subprocess.run(['playerctl', 'position'],
+                                              capture_output=True, text=True).stdout.strip()) * 1000)
 
         return {
             'title': title,
             'artist': artist,
             'position': position_ms,
-            'playing': status == 'Playing'
+            'status': status
         }
     except Exception as e:
         print(f"Error getting media info: {e}", file=sys.stderr)
@@ -95,31 +88,41 @@ def main():
         info = get_media_info()
 
         if not info:
-            # If we can't get any media info at all
-            print(json.dumps({"text": "..." }))
+            print(json.dumps({"text": ""}))
             sys.stdout.flush()
-            time.sleep(0.5)
+            time.sleep(1)
             continue
 
-        if info['playing']:
-            if info['title'] != last_title or info['artist'] != last_artist:
-                lyrics = fetch_lyrics(info['title'], info['artist'])
-                last_title = info['title']
-                last_artist = info['artist']
-                index = 0
+        current_title = info['title']
+        current_artist = info['artist']
+        current_status = info['status']
 
-            position = info['position']
+        # Track change detection
+        if current_title != last_title or current_artist != last_artist:
+            print(f"Song changed: {current_title} - {current_artist}")
+            lyrics = fetch_lyrics(current_title, current_artist)
+            index = 0
+            last_title = current_title
+            last_artist = current_artist
+            last_line = ""
 
+        position = info['position']
+        current_line = ""
+
+        # Only update if playing
+        if current_status == "Playing":
             for i in range(index, len(lyrics)):
                 if lyrics[i].timestamp <= position:
-                    last_line = lyrics[i].text
+                    current_line = lyrics[i].text
                     index = i
+                    last_line = current_line
                 else:
                     break
+        else:
+            current_line = last_line
 
-        # Output the current or last known line
-        output_text = last_line if info and info['playing'] else f"Paused: {last_line or '...'}"
-        print(json.dumps({"text": output_text}))
+        output = {"text": current_line}
+        print(json.dumps(output))
         sys.stdout.flush()
 
         time.sleep(0.5)

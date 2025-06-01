@@ -16,16 +16,16 @@ sudo install -Dm755 waylrc.py /usr/bin/waylrc
 ```json
 // ~/.config/waybar/config.jsonc
 "custom/waylrc": {
-        "exec": "waylrc",
-        "return-type": "json",
-        "interval": 0,
-        "format": "{}",
-        "tooltip": true
+    "exec": "waylrc",
+    "return-type": "json",
+    "interval": 0,
+    "format": "{}",
+    "tooltip": true
 }
 ```
 ```css
 /* ~/.config/waybar/style.css */
-#custom-waykey {
+#custom-waylrc {
     background-color: #4b4b4b;
 }
 ```
